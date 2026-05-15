@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-import { makeKubeObject } from '@kinvolk/headlamp-plugin/lib';
-import { KubeObjectInterface } from '@kinvolk/headlamp-plugin/lib/lib/k8s/KubeObject';
+import { KubeObject, KubeObjectInterface } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
+
+export interface ArgoApplicationSource {
+  repoURL: string;
+  targetRevision: string;
+  path?: string;
+  chart?: string;
+}
 
 export interface KubeArgoApplication extends KubeObjectInterface {
   spec: {
     project: string;
-    source: {
-      repoURL: string;
-      targetRevision: string;
-      path?: string;
-      chart?: string;
-    };
+    source?: ArgoApplicationSource;
     destination: {
       server: string;
       namespace: string;
@@ -35,12 +36,7 @@ export interface KubeArgoApplication extends KubeObjectInterface {
       automated?: { prune?: boolean; selfHeal?: boolean };
     };
     // Argo CD v2.6+ multi-source Applications
-    sources?: Array<{
-      repoURL: string;
-      targetRevision: string;
-      path?: string;
-      chart?: string;
-    }>;
+    sources?: ArgoApplicationSource[];
   };
   status?: {
     sync?: { status: string; revision?: string };
@@ -52,9 +48,7 @@ export interface KubeArgoApplication extends KubeObjectInterface {
   };
 }
 
-const ArgoApplicationBase = makeKubeObject<KubeArgoApplication>();
-
-export class ArgoApplication extends ArgoApplicationBase {
+export class ArgoApplication extends KubeObject<KubeArgoApplication> {
   static kind = 'Application';
   static apiName = 'applications';
   static apiVersion = ['argoproj.io/v1alpha1'];
@@ -66,5 +60,15 @@ export class ArgoApplication extends ArgoApplicationBase {
 
   get status() {
     return this.jsonData.status;
+  }
+
+  get sources() {
+    return (
+      this.jsonData.spec.sources ?? (this.jsonData.spec.source ? [this.jsonData.spec.source] : [])
+    );
+  }
+
+  get primarySource() {
+    return this.sources[0] ?? null;
   }
 }

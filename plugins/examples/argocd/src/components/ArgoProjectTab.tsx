@@ -29,8 +29,9 @@ import TableRow from '@mui/material/TableRow';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import React from 'react';
-import { useArgoCDAppsForProject } from '../hooks/useArgoCDApps';
-import { ArgoCDApplication } from '../types';
+import { ArgoApplication } from '../api/argoApplication';
+import { ArgoProjectProvider, useArgoProjectContext } from '../contexts/ArgoProjectContext';
+import { getShortRepoName } from '../utils/applicationSource';
 import { HealthStatusChip, SyncStatusChip } from './ArgoStatusChip';
 
 interface ProjectProp {
@@ -105,9 +106,13 @@ function AutoSyncBadge({ automated }: { automated?: { prune?: boolean; selfHeal?
   );
 }
 
-function RepoCell({ app }: { app: ArgoCDApplication }) {
-  const { repoURL, targetRevision, path, chart } = app.spec.source;
-  const shortRepo = repoURL.replace(/^https?:\/\/(github\.com\/|gitlab\.com\/)/, '');
+function RepoCell({ app }: { app: InstanceType<typeof ArgoApplication> }) {
+  const source = app.primarySource;
+  if (!source) {
+    return <Typography color="text.disabled">No source</Typography>;
+  }
+
+  const { repoURL, targetRevision, path, chart } = source;
   return (
     <Box>
       <Link
@@ -116,7 +121,7 @@ function RepoCell({ app }: { app: ArgoCDApplication }) {
         rel="noopener"
         sx={{ display: 'block', fontSize: '0.85rem' }}
       >
-        {shortRepo}
+        {getShortRepoName(repoURL)}
       </Link>
       <Typography variant="caption" color="text.secondary">
         {targetRevision}
@@ -141,11 +146,38 @@ function RevisionCell({ revision }: { revision?: string }) {
   );
 }
 
-export function ArgoProjectTab({ project }: { project: ProjectProp }) {
-  const { apps, loading, error, notInstalled } = useArgoCDAppsForProject(
-    project.namespaces,
-    project.clusters[0]
+function relativeTime(iso?: string): string {
+  if (!iso) return '—';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function LastSyncCell({ finishedAt }: { finishedAt?: string }) {
+  if (!finishedAt) return <Typography color="text.disabled">—</Typography>;
+  return (
+    <Tooltip title={new Date(finishedAt).toLocaleString()}>
+      <Typography variant="body2" sx={{ cursor: 'default' }}>
+        {relativeTime(finishedAt)}
+      </Typography>
+    </Tooltip>
   );
+}
+
+export function ArgoProjectTab({ project }: { project: ProjectProp }) {
+  return (
+    <ArgoProjectProvider project={project}>
+      <ArgoProjectTabContent project={project} />
+    </ArgoProjectProvider>
+  );
+}
+
+function ArgoProjectTabContent({ project }: { project: ProjectProp }) {
+  const { apps, loading, error, notInstalled } = useArgoProjectContext();
 
   if (loading) {
     return (
@@ -185,13 +217,14 @@ export function ArgoProjectTab({ project }: { project: ProjectProp }) {
               <TableCell>Sync</TableCell>
               <TableCell>Health</TableCell>
               <TableCell>Revision</TableCell>
+              <TableCell>Last Sync</TableCell>
               <TableCell>Repository</TableCell>
               <TableCell>Target Namespace</TableCell>
               <TableCell>Sync Policy</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {apps.map(app => (
+            {apps.map((app: InstanceType<typeof ArgoApplication>) => (
               <TableRow key={app.metadata.uid} hover>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -212,6 +245,9 @@ export function ArgoProjectTab({ project }: { project: ProjectProp }) {
                 </TableCell>
                 <TableCell>
                   <RevisionCell revision={app.status?.sync?.revision} />
+                </TableCell>
+                <TableCell>
+                  <LastSyncCell finishedAt={app.status?.operationState?.finishedAt} />
                 </TableCell>
                 <TableCell>
                   <RepoCell app={app} />

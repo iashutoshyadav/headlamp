@@ -15,25 +15,19 @@
  */
 
 import { Icon } from '@iconify/react';
+import { ResourceListView } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
-import InputAdornment from '@mui/material/InputAdornment';
 import Link from '@mui/material/Link';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import React, { useMemo, useState } from 'react';
+import React from 'react';
+import { ArgoApplication } from '../api/argoApplication';
 import { useArgoCDApps } from '../hooks/useArgoCDApps';
-import { ArgoCDApplication } from '../types';
+import { getShortRepoName } from '../utils/applicationSource';
 import { HealthStatusChip, SyncStatusChip } from './ArgoStatusChip';
+
+type App = InstanceType<typeof ArgoApplication>;
 
 function NotInstalledState() {
   return (
@@ -65,7 +59,7 @@ function NotInstalledState() {
   );
 }
 
-function SummaryStrip({ apps }: { apps: ArgoCDApplication[] }) {
+function SummaryStrip({ apps }: { apps: App[] }) {
   const outOfSync = apps.filter(a => a.status?.sync?.status === 'OutOfSync').length;
   const degraded = apps.filter(a => a.status?.health?.status === 'Degraded').length;
   const synced = apps.filter(a => a.status?.sync?.status === 'Synced').length;
@@ -111,151 +105,92 @@ function SummaryStrip({ apps }: { apps: ArgoCDApplication[] }) {
   );
 }
 
+const COLUMNS = [
+  {
+    label: 'Name',
+    getValue: (app: App) => app.metadata.name,
+    render: (app: App) => (
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Icon icon="simple-icons:argo" width={14} />
+          <Typography variant="body2" fontWeight={500}>
+            {app.metadata.name}
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          ns: {app.metadata.namespace}
+        </Typography>
+      </Box>
+    ),
+  },
+  {
+    label: 'Project',
+    getValue: (app: App) => app.spec.project,
+  },
+  {
+    label: 'Sync',
+    getValue: (app: App) => app.status?.sync?.status ?? 'Unknown',
+    render: (app: App) => <SyncStatusChip status={app.status?.sync?.status} />,
+  },
+  {
+    label: 'Health',
+    getValue: (app: App) => app.status?.health?.status ?? 'Unknown',
+    render: (app: App) => <HealthStatusChip status={app.status?.health?.status} />,
+  },
+  {
+    label: 'Revision',
+    getValue: (app: App) => app.status?.sync?.revision ?? '',
+    render: (app: App) => {
+      const rev = app.status?.sync?.revision;
+      if (!rev) return <Typography color="text.disabled">—</Typography>;
+      return (
+        <Tooltip title={rev}>
+          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+            {rev.slice(0, 7)}
+          </Typography>
+        </Tooltip>
+      );
+    },
+  },
+  {
+    label: 'Repository',
+    getValue: (app: App) => app.primarySource?.repoURL ?? '',
+    render: (app: App) => {
+      const source = app.primarySource;
+      if (!source) return <Typography color="text.disabled">No source</Typography>;
+      return (
+        <Box>
+          <Link href={source.repoURL} target="_blank" rel="noopener" sx={{ fontSize: '0.82rem' }}>
+            {getShortRepoName(source.repoURL)}
+          </Link>
+          <Typography variant="caption" color="text.secondary" display="block">
+            {source.targetRevision}
+            {source.path ? ` · ${source.path}` : ''}
+          </Typography>
+        </Box>
+      );
+    },
+  },
+  {
+    label: 'Target Namespace',
+    getValue: (app: App) => app.spec.destination.namespace,
+  },
+];
+
 export function ArgoAppList() {
   const { apps, loading, error, notInstalled } = useArgoCDApps();
-  const [search, setSearch] = useState('');
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return apps;
-    return apps.filter(
-      a =>
-        a.metadata.name.toLowerCase().includes(q) ||
-        a.spec.destination.namespace.toLowerCase().includes(q) ||
-        a.spec.source.repoURL.toLowerCase().includes(q) ||
-        a.spec.project.toLowerCase().includes(q)
-    );
-  }, [apps, search]);
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 6, px: 3 }}>
-        <CircularProgress size={24} />
-        <Typography color="text.secondary">Fetching Argo CD Applications…</Typography>
-      </Box>
-    );
-  }
 
   if (notInstalled) return <NotInstalledState />;
 
-  if (error) {
-    return (
-      <Box sx={{ py: 4, px: 3 }}>
-        <Typography color="error">Error loading applications: {error}</Typography>
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ p: 3 }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-        <Icon icon="simple-icons:argo" width={24} />
-        <Typography variant="h5">Argo CD Applications</Typography>
-      </Stack>
-
-      {apps.length > 0 && <SummaryStrip apps={apps} />}
-
-      <TextField
-        size="small"
-        placeholder="Search by name, namespace, repo, or project…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        sx={{ mb: 2, width: 380 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <Icon icon="mdi:magnify" width={18} />
-            </InputAdornment>
-          ),
-        }}
+    <Box sx={{ p: 1 }}>
+      {!loading && apps.length > 0 && <SummaryStrip apps={apps} />}
+      <ResourceListView
+        title="Argo CD Applications"
+        data={loading ? null : apps}
+        errorMessage={error}
+        columns={COLUMNS}
       />
-
-      {filtered.length === 0 ? (
-        <Typography color="text.secondary" sx={{ py: 4 }}>
-          {apps.length === 0
-            ? 'No Argo CD Applications found in this cluster.'
-            : 'No applications match your search.'}
-        </Typography>
-      ) : (
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Argo Project</TableCell>
-                <TableCell>Sync</TableCell>
-                <TableCell>Health</TableCell>
-                <TableCell>Revision</TableCell>
-                <TableCell>Repository</TableCell>
-                <TableCell>Target Namespace</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered.map(app => {
-                const shortRepo = app.spec.source.repoURL.replace(
-                  /^https?:\/\/(github\.com\/|gitlab\.com\/)/,
-                  ''
-                );
-                return (
-                  <TableRow key={app.metadata.uid} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Icon icon="simple-icons:argo" width={14} />
-                        <Typography variant="body2" fontWeight={500}>
-                          {app.metadata.name}
-                        </Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        ns: {app.metadata.namespace}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{app.spec.project}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <SyncStatusChip status={app.status?.sync?.status} />
-                    </TableCell>
-                    <TableCell>
-                      <HealthStatusChip status={app.status?.health?.status} />
-                    </TableCell>
-                    <TableCell>
-                      {app.status?.sync?.revision ? (
-                        <Tooltip title={app.status.sync.revision}>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.8rem', cursor: 'default' }}
-                          >
-                            {app.status.sync.revision.slice(0, 7)}
-                          </Typography>
-                        </Tooltip>
-                      ) : (
-                        <Typography color="text.disabled">—</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        href={app.spec.source.repoURL}
-                        target="_blank"
-                        rel="noopener"
-                        sx={{ fontSize: '0.82rem' }}
-                      >
-                        {shortRepo}
-                      </Link>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {app.spec.source.targetRevision}
-                        {app.spec.source.path ? ` · ${app.spec.source.path}` : ''}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{app.spec.destination.namespace}</Typography>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
     </Box>
   );
 }

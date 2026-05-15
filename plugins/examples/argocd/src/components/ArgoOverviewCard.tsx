@@ -21,8 +21,8 @@ import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import React from 'react';
-import { useArgoCDAppsForProject } from '../hooks/useArgoCDApps';
-import { ArgoCDApplication } from '../types';
+import { ArgoApplication } from '../api/argoApplication';
+import { ArgoProjectProvider, useArgoProjectContext } from '../contexts/ArgoProjectContext';
 import { HealthStatusChip, SyncStatusChip } from './ArgoStatusChip';
 
 interface ProjectProp {
@@ -42,7 +42,7 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function aggregateStatus(apps: ArgoCDApplication[]) {
+function aggregateStatus(apps: InstanceType<typeof ArgoApplication>[]) {
   const total = apps.length;
   const synced = apps.filter(a => a.status?.sync?.status === 'Synced').length;
   const outOfSync = apps.filter(a => a.status?.sync?.status === 'OutOfSync').length;
@@ -66,10 +66,15 @@ function aggregateStatus(apps: ArgoCDApplication[]) {
 }
 
 export function ArgoOverviewCard({ project }: { project: ProjectProp }) {
-  const { apps, loading, notInstalled } = useArgoCDAppsForProject(
-    project.namespaces,
-    project.clusters[0]
+  return (
+    <ArgoProjectProvider project={project}>
+      <ArgoOverviewCardContent />
+    </ArgoProjectProvider>
   );
+}
+
+function ArgoOverviewCardContent() {
+  const { apps, loading, notInstalled } = useArgoProjectContext();
 
   if (loading) {
     return (
@@ -82,7 +87,6 @@ export function ArgoOverviewCard({ project }: { project: ProjectProp }) {
     );
   }
 
-  // Don't render the card at all if Argo CD isn't installed
   if (notInstalled || apps.length === 0) {
     return null;
   }

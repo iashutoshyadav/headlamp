@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { StatusLabel } from '@kinvolk/headlamp-plugin/lib/components/common/Label';
+import { StatusLabel } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import React from 'react';
