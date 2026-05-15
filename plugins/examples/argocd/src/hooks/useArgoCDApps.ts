@@ -25,7 +25,7 @@ export interface UseArgoCDAppsResult {
 }
 
 /**
- * Fetch all Argo CD Applications from the cluster via makeKubeObject / useList.
+ * Fetch all Argo CD Applications from the cluster via KubeObject / useList.
  *
  * Pass `cluster` explicitly when called outside a cluster-URL context (e.g. the
  * Projects page at /project/:id has no /c/:cluster/ prefix, so the hook cannot

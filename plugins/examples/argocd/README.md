@@ -41,4 +41,4 @@ Copy the `dist/` folder to your Headlamp plugins directory.
 
 - Multi-cluster Projects: only the first cluster in `project.clusters` is queried in this version
 - Write actions (sync trigger, rollback) are not implemented — read-only
-- Multi-source Applications (`spec.sources[]`) are typed but not rendered separately yet
+- Multi-source Applications (`spec.sources[]`) are normalized to a primary source; individual sources are not rendered separately yet

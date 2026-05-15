@@ -48,10 +48,14 @@ registerSidebarEntry({
   label: 'Argo CD Apps',
   icon: 'simple-icons:argo',
   url: '/argocd/applications',
+  useClusterURL: true,
 });
 
 registerRoute({
   path: '/argocd/applications',
   sidebar: 'ArgoCD',
+  name: 'argocd-applications',
+  exact: true,
+  useClusterURL: true,
   component: () => <ArgoAppList />,
 });

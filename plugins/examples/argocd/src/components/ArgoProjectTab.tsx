@@ -29,8 +29,9 @@ import TableRow from '@mui/material/TableRow';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import React from 'react';
-import { useArgoCDAppsForProject } from '../hooks/useArgoCDApps';
-import { ArgoCDApplication } from '../types';
+import { ArgoApplication } from '../api/argoApplication';
+import { ArgoProjectProvider, useArgoProjectContext } from '../contexts/ArgoProjectContext';
+import { getShortRepoName } from '../utils/applicationSource';
 import { HealthStatusChip, SyncStatusChip } from './ArgoStatusChip';
 
 interface ProjectProp {
@@ -105,9 +106,13 @@ function AutoSyncBadge({ automated }: { automated?: { prune?: boolean; selfHeal?
   );
 }
 
-function RepoCell({ app }: { app: ArgoCDApplication }) {
-  const { repoURL, targetRevision, path, chart } = app.spec.source;
-  const shortRepo = repoURL.replace(/^https?:\/\/(github\.com\/|gitlab\.com\/)/, '');
+function RepoCell({ app }: { app: InstanceType<typeof ArgoApplication> }) {
+  const source = app.primarySource;
+  if (!source) {
+    return <Typography color="text.disabled">No source</Typography>;
+  }
+
+  const { repoURL, targetRevision, path, chart } = source;
   return (
     <Box>
       <Link
@@ -116,7 +121,7 @@ function RepoCell({ app }: { app: ArgoCDApplication }) {
         rel="noopener"
         sx={{ display: 'block', fontSize: '0.85rem' }}
       >
-        {shortRepo}
+        {getShortRepoName(repoURL)}
       </Link>
       <Typography variant="caption" color="text.secondary">
         {targetRevision}
@@ -142,10 +147,15 @@ function RevisionCell({ revision }: { revision?: string }) {
 }
 
 export function ArgoProjectTab({ project }: { project: ProjectProp }) {
-  const { apps, loading, error, notInstalled } = useArgoCDAppsForProject(
-    project.namespaces,
-    project.clusters[0]
+  return (
+    <ArgoProjectProvider project={project}>
+      <ArgoProjectTabContent project={project} />
+    </ArgoProjectProvider>
   );
+}
+
+function ArgoProjectTabContent({ project }: { project: ProjectProp }) {
+  const { apps, loading, error, notInstalled } = useArgoProjectContext();
 
   if (loading) {
     return (
@@ -191,7 +201,7 @@ export function ArgoProjectTab({ project }: { project: ProjectProp }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {apps.map(app => (
+            {apps.map((app: InstanceType<typeof ArgoApplication>) => (
               <TableRow key={app.metadata.uid} hover>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
